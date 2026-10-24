@@ -46,7 +46,7 @@ ABOUT_TEXT = (
     "├ уведомления о смене статуса\n"
     "├ демо-админка\n"
     "└ удаление своих данных одной кнопкой\n\n"
-    "🔗 <b>Исходный код:</b> <a href='https://github.com/USERNAME/shop-bot'>GitHub</a>\n"
+    "🔗 <b>Исходный код:</b> <a href='https://github.com/westums/shop-bot'>GitHub</a>\n"
     f"{SEP}\n"
     "💡 <i>Все заказы и платежи — демонстрационные, реальных операций нет.</i>"
 )
