@@ -17,7 +17,6 @@ PAGE_SIZE = 5
 
 
 async def _edit(callback: CallbackQuery, text: str, kb):
-    """Обновляет текущее сообщение. Если это фото (карточка товара) — редактирует подпись."""
     try:
         if callback.message.photo:
             await callback.message.edit_caption(caption=text, reply_markup=kb, parse_mode="HTML")
@@ -29,7 +28,6 @@ async def _edit(callback: CallbackQuery, text: str, kb):
 
 
 async def _send_text(callback: CallbackQuery, text: str, kb):
-    """Показывает текст. Если текущее сообщение с фото — удаляет и отправляет новое текстовое."""
     if callback.message.photo:
         try:
             await callback.message.delete()
@@ -42,6 +40,14 @@ async def _send_text(callback: CallbackQuery, text: str, kb):
         except TelegramBadRequest as e:
             if "message is not modified" not in str(e):
                 logger.warning("edit error: %s", e)
+
+
+def _page_suffix(page: int, total: int, page_size: int) -> str:
+    """Возвращает ' · стр. 2/3' если страниц больше одной, иначе пусто."""
+    total_pages = (total + page_size - 1) // page_size
+    if total_pages <= 1:
+        return ""
+    return f" · стр. {page + 1}/{total_pages}"
 
 
 @router.message(F.text == "🛍 Каталог")
@@ -74,11 +80,11 @@ async def show_products(callback: CallbackQuery):
         await callback.answer("В этой категории пока нет товаров", show_alert=True)
         return
 
-    total_pages = (total + PAGE_SIZE - 1) // PAGE_SIZE
     text = (
-        f"🛍 <b>КАТАЛОГ</b> → {cat_name}\n"
+        f"🛍 <b>КАТАЛОГ</b> → {cat_name}"
+        f"{_page_suffix(page, total, PAGE_SIZE)}\n"
         f"{SEP}\n\n"
-        f"Страница {page + 1} из {total_pages}"
+        "Выберите товар:"
     )
     await _send_text(callback, text,
                      inline.products_kb(products, cat_id, page, total, PAGE_SIZE, cat_name))
@@ -102,10 +108,8 @@ async def show_product(callback: CallbackQuery):
     kb = inline.product_kb(product_id, cat_id, page, sizes)
 
     if callback.message.photo:
-        # Уже показываем карточку с фото — обновляем подпись
         await _edit(callback, caption, kb)
     elif product.get("photo_url"):
-        # Текстовое сообщение — удаляем и показываем фото товара
         try:
             await callback.message.delete()
         except TelegramBadRequest:
@@ -119,7 +123,6 @@ async def show_product(callback: CallbackQuery):
             return
         except Exception as e:
             logger.warning("Не удалось отправить фото %s: %s", product_id, e)
-        # fallback на текст
         await callback.message.answer(caption, reply_markup=kb, parse_mode="HTML")
     else:
         await _edit(callback, caption, kb)
@@ -247,12 +250,12 @@ async def qty_add(callback: CallbackQuery, state: FSMContext):
     products = await db.get_products_by_category(cat_id, offset=page * PAGE_SIZE, limit=PAGE_SIZE)
 
     if products:
-        total_pages = (total + PAGE_SIZE - 1) // PAGE_SIZE
         text = (
             f"{added}\n\n"
             f"{SEP}\n"
-            f"🛍 <b>КАТАЛОГ</b> → {cat_name}\n"
-            f"Страница {page + 1} из {total_pages}"
+            f"🛍 <b>КАТАЛОГ</b> → {cat_name}"
+            f"{_page_suffix(page, total, PAGE_SIZE)}\n\n"
+            "Выберите товар:"
         )
         await _send_text(callback, text,
                          inline.products_kb(products, cat_id, page, total, PAGE_SIZE, cat_name))

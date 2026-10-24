@@ -1,5 +1,6 @@
 import aiosqlite
 from database.db import DB_PATH
+from services.format import calc_delivery
 
 
 PRODUCTS = [
@@ -36,8 +37,28 @@ PRODUCTS = [
 ]
 
 
+# Демо-заказы: (status, address, [(product_id, name, size, price, qty)])
+DEMO_USER_ID = 100000000
+DEMO_USER_NAME = "Александра Смирнова"
+DEMO_USER_PHONE = "+7 900 123-45-67"
+
+DEMO_ORDERS = [
+    ("delivered", "Москва, ул. Тверская, 12, кв. 45", [
+        (6, "Кроссовки белые", "42", 5500, 1),
+    ]),
+    ("shipped", "Санкт-Петербург, Невский пр., 88, кв. 12", [
+        (1, "Базовая белая футболка", "M", 1500, 2),
+        (3, "Джинсы прямые", "32", 4500, 1),
+    ]),
+    ("paid", "Казань, ул. Баумана, 5, кв. 3", [
+        (2, "Футболка с принтом", "L", 1900, 1),
+    ]),
+]
+
+
 async def seed_data():
     async with aiosqlite.connect(DB_PATH) as db:
+        # Категории и товары
         async with db.execute("SELECT COUNT(*) FROM categories") as cur:
             count = (await cur.fetchone())[0]
         if count == 0:
@@ -54,4 +75,30 @@ async def seed_data():
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 PRODUCTS,
             )
+            await db.commit()
+
+        # Демо-заказы (только если их ещё нет)
+        async with db.execute("SELECT COUNT(*) FROM orders WHERE is_demo = 1") as cur:
+            demo_count = (await cur.fetchone())[0]
+        if demo_count == 0:
+            for status, address, items in DEMO_ORDERS:
+                items_total = sum(price * qty for _, _, _, price, qty in items)
+                delivery = calc_delivery(items_total)
+                grand_total = items_total + delivery
+
+                cur = await db.execute(
+                    "INSERT INTO orders "
+                    "(user_id, full_name, phone, address, total, status, is_demo) "
+                    "VALUES (?, ?, ?, ?, ?, ?, 1)",
+                    (DEMO_USER_ID, DEMO_USER_NAME, DEMO_USER_PHONE,
+                     address, grand_total, status),
+                )
+                order_id = cur.lastrowid
+                for pid, pname, size, price, qty in items:
+                    await db.execute(
+                        "INSERT INTO order_items "
+                        "(order_id, product_id, product_name, size, price, quantity) "
+                        "VALUES (?, ?, ?, ?, ?, ?)",
+                        (order_id, pid, pname, size, price, qty),
+                    )
             await db.commit()

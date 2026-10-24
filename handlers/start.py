@@ -1,4 +1,4 @@
-import os
+import re
 
 from aiogram import Router, F
 from aiogram.filters import CommandStart, Command
@@ -7,7 +7,7 @@ from aiogram.types import Message, CallbackQuery
 
 from database import db
 from keyboards import reply, inline
-from services.format import SEP, fmt_price
+from services.format import SEP, fmt_price, fmt_date
 from states.fsm import Registration
 
 router = Router()
@@ -50,6 +50,27 @@ ABOUT_TEXT = (
     f"{SEP}\n"
     "💡 <i>Все заказы и платежи — демонстрационные, реальных операций нет.</i>"
 )
+
+
+def _valid_name(text: str) -> bool:
+    text = text.strip()
+    if len(text) < 2 or len(text) > 50:
+        return False
+    # Только буквы (кириллица/латиница), пробелы и дефисы
+    return bool(re.fullmatch(r"[A-Za-zА-Яа-яЁё\s\-]+", text))
+
+
+def _normalize_phone(raw: str) -> str:
+    digits = re.sub(r"\D", "", raw)
+    if not digits:
+        return raw.strip()
+    if len(digits) == 11 and digits[0] in ("7", "8"):
+        return f"+7 {digits[1:4]} {digits[4:7]}-{digits[7:9]}-{digits[9:11]}"
+    if len(digits) == 10:
+        return f"+7 {digits[0:3]} {digits[3:6]}-{digits[6:8]}-{digits[8:10]}"
+    if raw.strip().startswith("+"):
+        return raw.strip()
+    return "+" + digits
 
 
 @router.message(CommandStart())
@@ -95,7 +116,15 @@ async def reg_cancel(message: Message, state: FSMContext):
 
 @router.message(Registration.full_name)
 async def reg_name(message: Message, state: FSMContext):
-    await state.update_data(full_name=message.text.strip())
+    name = message.text.strip()
+    if not _valid_name(name):
+        await message.answer(
+            "❌ Пожалуйста, введите имя буквами (от 2 до 50 символов).\n"
+            "Например: <i>Иван Петров</i>",
+            reply_markup=reply.cancel_kb(), parse_mode="HTML",
+        )
+        return
+    await state.update_data(full_name=name)
     await message.answer(
         "Приятно познакомиться! Теперь отправьте номер телефона кнопкой ниже "
         "или напишите вручную (например, +7 999 123-45-67).",
@@ -106,12 +135,14 @@ async def reg_name(message: Message, state: FSMContext):
 
 @router.message(Registration.phone, F.contact)
 async def reg_phone_contact(message: Message, state: FSMContext):
-    await finish_registration(message, state, message.contact.phone_number)
+    phone = _normalize_phone(message.contact.phone_number)
+    await finish_registration(message, state, phone)
 
 
 @router.message(Registration.phone, F.text)
 async def reg_phone_text(message: Message, state: FSMContext):
-    await finish_registration(message, state, message.text.strip())
+    phone = _normalize_phone(message.text.strip())
+    await finish_registration(message, state, phone)
 
 
 async def finish_registration(message: Message, state: FSMContext, phone: str):
@@ -143,7 +174,7 @@ async def show_profile(message: Message):
         f"👋 <b>{user['full_name']}</b>\n"
         f"📞 {user['phone'] or '—'}\n"
         f"🆔 <code>{user['user_id']}</code>\n"
-        f"📅 С нами с {user['created_at'][:10]}\n\n"
+        f"📅 С нами с {fmt_date(user['created_at'])}\n\n"
         f"📦 Заказов: <b>{len(orders)}</b>\n"
         f"💰 Потрачено: <b>{fmt_price(total_spent)}</b>\n\n"
         f"🔐 Согласие на обработку ПД: {'✅ да' if user['consent_given'] else '❌ нет'}\n"

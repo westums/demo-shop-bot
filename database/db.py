@@ -61,6 +61,7 @@ async def init_db():
                 address TEXT NOT NULL,
                 total INTEGER NOT NULL,
                 status TEXT DEFAULT 'new',
+                is_demo INTEGER DEFAULT 0,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -95,6 +96,12 @@ async def create_user(user_id: int, full_name: str, phone: str = None, consent: 
             "INSERT OR REPLACE INTO users (user_id, full_name, phone, consent_given) VALUES (?, ?, ?, ?)",
             (user_id, full_name, phone, 1 if consent else 0),
         )
+        await db.commit()
+
+
+async def update_user_phone(user_id: int, phone: str):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE users SET phone = ? WHERE user_id = ?", (phone, user_id))
         await db.commit()
 
 
@@ -214,11 +221,12 @@ async def clear_cart(user_id: int):
 # ---------- Заказы ----------
 
 async def create_order(user_id: int, full_name: str, phone: str, address: str,
-                       total: int, items: list[dict]) -> int:
+                       total: int, items: list[dict], is_demo: int = 0) -> int:
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute(
-            "INSERT INTO orders (user_id, full_name, phone, address, total) VALUES (?, ?, ?, ?, ?)",
-            (user_id, full_name, phone, address, total),
+            "INSERT INTO orders (user_id, full_name, phone, address, total, is_demo) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (user_id, full_name, phone, address, total, is_demo),
         )
         order_id = cur.lastrowid
         for item in items:
@@ -235,7 +243,8 @@ async def get_user_orders(user_id: int):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute(
-            "SELECT * FROM orders WHERE user_id = ? ORDER BY id DESC", (user_id,)
+            "SELECT * FROM orders WHERE user_id = ? AND is_demo = 0 ORDER BY id DESC",
+            (user_id,),
         ) as cur:
             return [dict(r) for r in await cur.fetchall()]
 

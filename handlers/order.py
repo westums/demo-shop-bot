@@ -5,7 +5,9 @@ from aiogram.exceptions import TelegramBadRequest
 
 from database import db
 from keyboards import inline
-from services.format import SEP, STATUS_LABELS, fmt_price
+from services.format import (
+    SEP, STATUS_LABELS, fmt_price, fmt_date, calc_delivery,
+)
 from services.qr import generate_demo_qr
 from states.fsm import OrderFSM
 
@@ -17,7 +19,9 @@ async def process_address(message: Message, state: FSMContext):
     address = message.text.strip()
     data = await state.get_data()
     items = data.get("cart_items", [])
-    total = sum(i["price"] * i["quantity"] for i in items)
+    items_total = sum(i["price"] * i["quantity"] for i in items)
+    delivery = calc_delivery(items_total)
+    total = items_total + delivery
     user = await db.get_user(message.from_user.id)
 
     order_id = await db.create_order(
@@ -28,14 +32,17 @@ async def process_address(message: Message, state: FSMContext):
     await db.clear_cart(message.from_user.id)
     await state.clear()
 
+    delivery_line = "бесплатно" if delivery == 0 else fmt_price(delivery)
     qr_file = generate_demo_qr(order_id)
     await message.answer_photo(
         photo=qr_file,
         caption=(
             f"🧾 <b>ЗАКАЗ #{order_id} СОЗДАН</b>\n"
             f"{SEP}\n\n"
-            f"💰 К оплате: <b>{fmt_price(total)}</b>\n"
             f"📍 Адрес: {address}\n\n"
+            f"💰 Товары: {fmt_price(items_total)}\n"
+            f"🚚 Доставка: {delivery_line}\n"
+            f"📦 <b>К оплате: {fmt_price(total)}</b>\n\n"
             f"{SEP}\n"
             "🔧 <i>Это демонстрационный QR-код. Здесь могла бы быть ссылка "
             "на оплату через ЮKassa, Telegram Stars или другой сервис.</i>\n\n"
@@ -92,8 +99,8 @@ async def my_orders(message: Message):
     lines = ["📦 <b>МОИ ЗАКАЗЫ</b>", SEP, ""]
     for o in orders:
         label = STATUS_LABELS.get(o["status"], o["status"])
-        lines.append(f"<b>#{o['id']}</b> · {o['created_at'][:10]} · {fmt_price(o['total'])}")
-        lines.append(f"   {label}")
+        lines.append(f"<b>#{o['id']}</b> · {fmt_date(o['created_at'])}")
+        lines.append(f"   {fmt_price(o['total'])} · {label}")
         lines.append("")
     lines.append(SEP)
     lines.append("💡 Уведомления о смене статуса приходят автоматически.")

@@ -2,6 +2,15 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 
+STATUS_SHORT = {
+    "new": "🆕",
+    "paid": "💰",
+    "shipped": "📦",
+    "delivered": "✅",
+    "cancelled": "❌",
+}
+
+
 def categories_kb(categories: list[dict]) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     for cat in categories:
@@ -92,8 +101,10 @@ def payment_kb(order_id: int) -> InlineKeyboardMarkup:
 def admin_orders_kb(orders: list[dict]) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     for o in orders:
+        emoji = STATUS_SHORT.get(o["status"], "•")
+        demo_mark = " 🎭" if o.get("is_demo") == 1 else ""
         builder.button(
-            text=f"Заказ #{o['id']} — {o['total']} ₽ — {o['status']}",
+            text=f"{emoji} #{o['id']} · {o['total']} ₽{demo_mark}",
             callback_data=f"admin_order_{o['id']}",
         )
     builder.adjust(1)
@@ -114,6 +125,12 @@ def admin_order_actions_kb(order_id: int) -> InlineKeyboardMarkup:
     builder.adjust(2)
     builder.row(InlineKeyboardButton(text="⬅️ К списку заказов", callback_data="admin_back"))
     return builder.as_markup()
+
+
+def admin_back_only_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⬅️ К списку заказов", callback_data="admin_back")],
+    ])
 
 
 def confirm_delete_kb() -> InlineKeyboardMarkup:
