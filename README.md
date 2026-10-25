@@ -232,6 +232,6 @@ MIT — используй как референс для своих проек�
 
 ## 👤 Автор
 
-**westums** — [@westumboy](https://web.telegram.org/k/#7656699695) · [GitHub](https://github.com/westums)
+**westums** — [@westumboy](https://t.me/westumboy) · [GitHub](https://github.com/westums)
 
 Если проект помог или понравился — поставь ⭐ на GitHub, это приятно 🙌
